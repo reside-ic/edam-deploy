@@ -1,0 +1,5 @@
+hdb-credentials
+db.env
+moodle.env
+*.bak
+

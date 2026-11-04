@@ -96,7 +96,7 @@ http {
         }
         
         location /metrics {
-            proxy_pass http://edam:9100/metrics
+            proxy_pass http://edam:9100/metrics;
         }
     }
 }

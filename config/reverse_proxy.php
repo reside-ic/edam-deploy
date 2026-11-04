@@ -1,0 +1,2 @@
+<?php
+$CFG->sslproxy = true;

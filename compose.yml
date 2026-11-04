@@ -1,0 +1,110 @@
+name: moodle
+
+services:
+  db:
+    image: mariadb:11.4
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    env_file:
+      - db.env
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - backend
+
+  moodle:
+    build:
+      context: .
+      args:
+        MOODLE_BASE: oksigenia/moodle:5.3
+    image: local/moodle:5.3
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - moodle.env
+    volumes:
+      - moodle_code:/var/www/moodle
+      - moodledata:/var/www/moodledata
+      - ./config:/etc/moodle/config.d:ro
+    expose:
+      - "8080"
+    networks:
+      - frontend
+      - backend
+
+  moodle-cron:
+    image: local/moodle:5.3
+    build:
+      context: .
+      args:
+        MOODLE_BASE: oksigenia/moodle:5.3
+    command: ["cron"]
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - moodle.env
+    environment:
+      MOODLE_CRON: "on"
+    volumes:
+      - moodle_code:/var/www/moodle
+      - moodledata:/var/www/moodledata
+      - ./config:/etc/moodle/config.d:ro
+    networks:
+      - backend
+
+  proxy:
+    command: moodle:8080 edam.dide.ic.ac.uk 80 443
+    image: ghcr.io/reside-ic/proxy-nginx:master
+    depends_on:
+      - moodle
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped
+    volumes:
+      - edam-tls:/run/proxy
+      - ./proxy/nginx.conf.template:/etc/nginx/nginx.conf.template:ro
+    networks:
+      - frontend
+
+  acme-buddy:
+    image: ghcr.io/reside-ic/acme-buddy:main
+    ports:
+      - 2112:2112
+    restart: unless-stopped
+    volumes:
+      - edam-tls:/tls
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file:
+      - hdb-credentials
+    command: >
+      --domain edam.dide.ic.ac.uk
+      --email reside@imperial.ac.uk
+      --dns-provider hdb
+      --certificate-path /tls/certificate.pem
+      --key-path /tls/key.pem
+      --account-path /tls/account.json
+      --reload-container moodle-proxy-1
+
+volumes:
+  db_data:
+  moodle_code:
+  moodledata:
+  edam-tls:
+
+networks:
+  frontend:
+  backend:
+    internal: true

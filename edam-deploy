@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+set -eEuo pipefail
+
+setup_env_files() {
+    umask 077
+
+    export VAULT_ADDR=https://vault.dide.ic.ac.uk:8200
+    VAULT_TOKEN=$(vault login -method=github -token-only)
+    export VAULT_TOKEN
+
+    #####################
+    # hdb-credentials
+    
+    local hdb_username hdb_password
+    hdb_username=$(vault read -field=username "secret/certbot-hdb/credentials")
+    hdb_password=$(vault read -field=password "secret/certbot-hdb/credentials")
+
+    cat > hdb-credentials <<EOF
+HDB_ACME_USERNAME=$hdb_username
+HDB_ACME_PASSWORD=$hdb_password
+EOF
+
+    #####################
+    # db.env
+
+    local mariadb_database mariadb_user mariadb_password mariadb_root_password
+    mariadb_database=$(vault read -field=MARIADB_DATABASE "secret/edam/db")
+    mariadb_user=$(vault read -field=MARIADB_USER "secret/edam/db")
+    mariadb_password=$(vault read -field=MARIADB_PASSWORD "secret/edam/db")
+    mariadb_root_password=$(vault read -field=MARIADB_ROOT_PASSWORD "secret/edam/db")
+    
+    cat > db.env <<EOF
+MARIADB_DATABASE=$mariadb_database
+MARIADB_USER=$mariadb_user
+MARIADB_PASSWORD=$mariadb_password
+MARIADB_ROOT_PASSWORD=$mariadb_root_password
+EOF
+
+    #####################
+    # moodle.env
+    
+    local moodle_admin_user moodle_admin_password
+    moodle_admin_user=$(vault read -field=MOODLE_ADMIN_USER "secret/edam/moodle")
+    moodle_admin_password=$(vault read -field=MOODLE_ADMIN_PASSWORD "secret/edam/moodle")
+   
+
+    cat > moodle.env <<EOF
+MOODLE_URL=https://edam.dide.ic.ac.uk
+MOODLE_HOST_PORT=8080
+
+MOODLE_DB_TYPE=mariadb
+MOODLE_DB_HOST=db
+MOODLE_DB_PORT=3306
+MOODLE_DB_NAME=$mariadb_database
+MOODLE_DB_USER=$mariadb_user
+MOODLE_DB_PASSWORD=$mariadb_password
+
+MOODLE_ADMIN_USER=$moodle_admin_user
+MOODLE_ADMIN_PASSWORD=$moodle_admin_password
+MOODLE_ADMIN_EMAIL=reside@imperial.ac.uk
+
+MOODLE_CRON="off"
+MOODLE_AUTO_UPGRADE="on"
+MOODLE_BACKUP_BEFORE_UPGRADE="on"
+MOODLE_BACKUP_KEEP="3"
+
+MOODLE_SITE_NAME=EDAM
+MOODLE_SITE_SHORTNAME=EDAM
+MOODLE_LANG=en
+MOODLE_TIMEZONE=Europe/London
+PHP_DATE_TIMEZONE=Europe/London
+
+PHP_MEMORY_LIMIT=512M
+PHP_UPLOAD_MAX_FILESIZE=100M
+PHP_POST_MAX_SIZE=100M
+PHP_MAX_EXECUTION_TIME=300
+PHP_MAX_INPUT_VARS=5000
+EOF
+
+}
+
+# Main logic
+case "${1:-}" in
+    up)
+        setup_env_files
+        docker compose up -d --build
+        ;;
+    pull)
+        setup_env_file
+        docker compose pull
+        docker compose up -d --build
+        ;;
+    down)
+        docker compose down
+        ;;
+    *)
+        echo "Usage: $0 {up|pull|down}"
+        exit 1
+        ;;
+esac

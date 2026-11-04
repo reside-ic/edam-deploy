@@ -21,11 +21,7 @@ services:
       - backend
 
   moodle:
-    build:
-      context: .
-      args:
-        MOODLE_BASE: oksigenia/moodle:5.3
-    image: local/moodle:5.3
+    image: oksigenia/moodle:5.3
     restart: unless-stopped
     depends_on:
       db:
@@ -43,11 +39,7 @@ services:
       - backend
 
   moodle-cron:
-    image: local/moodle:5.3
-    build:
-      context: .
-      args:
-        MOODLE_BASE: oksigenia/moodle:5.3
+    image: oksigenia/moodle:5.3
     command: ["cron"]
     restart: unless-stopped
     depends_on:

@@ -94,5 +94,9 @@ http {
         location / {
             return 301 https://${HTTP_HOST}:${HTTPS_PORT}$request_uri;
         }
+        
+        location /metrics {
+            proxy_pass http://edam:9100/metrics
+        }
     }
 }
